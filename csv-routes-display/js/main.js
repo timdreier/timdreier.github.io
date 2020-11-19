@@ -1,7 +1,3 @@
-var routes;
-var markers;
-var connections;
-
 $(document).ready(function() {
     var map = L.map('map', {
         center: [48.365738, 10.886133],
@@ -10,10 +6,16 @@ $(document).ready(function() {
 
     $.ajax({
         type: "GET",
-        url: "Filialen.csv",
+        url: "customers.csv",
         dataType: "text",
         success: function(data) {$('#nodes').val(data)}
     });
+
+    var routes;
+    var markers;
+    var connections;
+
+    $('#routes').val('{}')
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -34,20 +36,7 @@ $(document).ready(function() {
             .bindPopup(node[0] + ' (Nachfrage: ' + node[3] + ')');
     }
 
-    $( '#show' ).click(function () {
-        //Parse Routes
-        let routes_raw = $('#routes').val()
-            .replaceAll('> <',',')
-            .replaceAll('<','')
-            .replaceAll('>','')
-            .replaceAll(' ',',')
-            .replaceAll('{','[')
-            .replaceAll('}',']');
-        routes = JSON.parse(routes_raw);
-
-        //Parse CSV
-        let csv = $('#nodes').val();
-
+    function parseCSV(csv) {
         var csv_lines = csv.split(/\r\n|\n/);
         var headers = csv_lines[0].split(';');
         var lines = [];
@@ -63,6 +52,16 @@ $(document).ready(function() {
                 lines.push(tarr);
             }
         }
+        return lines;
+    }
+
+    $( '#show' ).click(function () {
+        //Parse Routes
+        let routes_raw = $('#routes').val();
+        routes = JSON.parse(routes_raw);
+
+        let nodes_csv = $('#nodes').val();
+        let lines = parseCSV(nodes_csv);
 
         //Remove markers
         if (typeof markers !== 'undefined') {
@@ -70,15 +69,16 @@ $(document).ready(function() {
         }
         markers = L.layerGroup().addTo(map);
 
-        //Add markers
         if ($('#showunused').is(':checked')) {
             lines.forEach(node => {
                 addMarker(node);
             });
         }
         else {
-            lines.forEach((node, index) => {
-                if (routes.some(route => route.includes(index))) {
+            lines.forEach((node) => {
+                let used_nodes = routes.reduce(function(prev, next) {return prev.concat(next);})
+                let current_node = [node[1],node[2]];
+                if (used_nodes.some(r => r.length == current_node.length && r.every((value, index) => current_node[index] == value))) {
                     addMarker(node);
                 }
             });
@@ -92,10 +92,9 @@ $(document).ready(function() {
         routes.forEach(route => {
             var latlngs = [];
             route.forEach(node => {
-                latlngs.push([lines[node][1],lines[node][2]])
+                latlngs.push([node[0],node[1]]);
             })
-            latlngs.push([lines[0][1],lines[0][2]])
-            var polyline = L.polyline(latlngs, {color: getRandomColor()}).addTo(connections);
+            L.polyline(latlngs, {color: getRandomColor()}).addTo(connections);
         });
         connections.addTo(map);
     })
